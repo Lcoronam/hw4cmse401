@@ -1,0 +1,12 @@
+#!/bin/bash
+#SBATCH --job-name=revGOL_mpi
+#SBATCH --output=revGOL_mpi.out
+#SBATCH --error=revGOL_mpi.err
+#SBATCH --time=2:00:00
+#SBATCH --ntasks=50
+#SBATCH --mem=100G
+#SBATCH --cpus-per-task=1
+
+module load OpenMPI
+
+mpirun -np 50 ./revGOL-mpi cmse2.txt > mpi_basic_best.txt
