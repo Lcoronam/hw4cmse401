@@ -132,7 +132,8 @@ char * readplate(char * filename, int *n) {
 int main(int argc, char *argv[]) {
     int which = 0;
     int n;
-    int npop = 10000;
+    int npop_total = 10000;
+    int npop = npop_total / size;
     int ngen = 1000;
     int M=0;
     int rand_seed;
@@ -162,6 +163,7 @@ int main(int argc, char *argv[]) {
     int pop_fitness[npop];
     int best =0;
     int sbest = 1;
+    int plate_size = (n + 2) * (n + 2);
 
     for(int i=0; i < npop; i++) {
         pop_fitness[i] = n*n;
@@ -202,6 +204,30 @@ int main(int argc, char *argv[]) {
 
         printf("Done with Generation %d with best=%d fitness=%d\n", g,best, pop_fitness[best]);
         
+        int neighbor_send = (rank + 1) % size;
+        int neighbor_recv = (rank - 1 + size) % size;
+        int neighbor_fitness;
+        char *neighbor_plate = (char*)malloc(plate_size * sizeof(char));
+        
+        if (rank == 0) {
+            MPI_Recv(&neighbor_fitness, 1, MPI_INT, neighbor_recv, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(neighbor_plate, plate_size, MPI_CHAR, neighbor_recv, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Send(&pop_fitness[best], 1, MPI_INT, neighbor_send, 2, MPI_COMM_WORLD);
+            MPI_Send(population[best], plate_size, MPI_CHAR, neighbor_send, 3, MPI_COMM_WORLD);
+        } else {
+            MPI_Send(&pop_fitness[best], 1, MPI_INT, neighbor_send, 2, MPI_COMM_WORLD);
+            MPI_Send(population[best], plate_size, MPI_CHAR, neighbor_send, 3, MPI_COMM_WORLD);
+            MPI_Recv(&neighbor_fitness, 1, MPI_INT, neighbor_recv, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(neighbor_plate, plate_size, MPI_CHAR, neighbor_recv, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+
+        if (neighbor_fitness < pop_fitness[best]) {
+            sbest = best;
+            memcpy(population[best], neighbor_plate, plate_size);
+            pop_fitness[best] = neighbor_fitness;
+        }
+        free(neighbor_plate);
+        
         int rate = (int) ((double) pop_fitness[best]/(n*n) * 100);
 
         for(int i=0; i <npop; i++) {
@@ -228,7 +254,6 @@ int main(int argc, char *argv[]) {
     for(int i=0; i < npop; i++)
         free(population[i]);
     
-    int plate_size = (n + 2) * (n + 2);
     if (rank!=0){
         MPI_Send(&pop_fitness[best], 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
         MPI_Send(population[best], plate_size, MPI_CHAR, 0, 1, MPI_COMM_WORLD);
